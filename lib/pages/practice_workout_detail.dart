@@ -143,96 +143,118 @@ class _PracticeWorkoutDetailPageState extends State<PracticeWorkoutDetailPage> {
                   ),
                   child: Column(
                     children: [
-                      const SizedBox(height: 30),
+                      // Scrollable Content
+                      Expanded(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.symmetric(vertical: 20),
+                          child: Column(
+                            children: [
+                              // Workout Title
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 30),
+                                child: Text(
+                                  widget.workout['title'],
+                                  style: TextStyle(
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.deepPurple[800],
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                '${widget.workout['duration']} • ${widget.workout['difficulty']}',
+                                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                              ),
+                              const SizedBox(height: 30),
 
-                      // Workout Title
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 30),
-                        child: Text(
-                          widget.workout['title'],
-                          style: TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.deepPurple[800],
+                              // Timer
+                              Container(
+                                width: 200,
+                                height: 200,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: color.withOpacity(0.1),
+                                  border: Border.all(color: color, width: 3),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    _elapsedTime,
+                                    style: TextStyle(
+                                      fontSize: 36,
+                                      fontWeight: FontWeight.bold,
+                                      color: color,
+                                    ),
+                                  ),
+                                ),
+                              ),
+
+                              const SizedBox(height: 30),
+
+                              // Info Cards
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 30),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                  children: [
+                                    Expanded(
+                                      child: _buildInfoCard(
+                                        Icons.repeat,
+                                        'Sets',
+                                        widget.workout['sets'] as String,
+                                        Colors.blue,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 15),
+                                    Expanded(
+                                      child: _buildInfoCard(
+                                        Icons.category,
+                                        'Category',
+                                        widget.workout['category'] as String,
+                                        color,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              const SizedBox(height: 30),
+
+                              // Description
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 30),
+                                child: Text(
+                                  widget.workout['description'] as String,
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    color: Colors.grey[700],
+                                    height: 1.5,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                            ],
                           ),
-                          textAlign: TextAlign.center,
                         ),
                       ),
-                      const SizedBox(height: 10),
-                      Text(
-                        '${widget.workout['duration']} • ${widget.workout['difficulty']}',
-                        style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-                      ),
-                      const SizedBox(height: 40),
 
-                      // Timer
+                      // Control Buttons (Fixed at bottom)
                       Container(
-                        width: 200,
-                        height: 200,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: color.withOpacity(0.1),
-                          border: Border.all(color: color, width: 3),
-                        ),
-                        child: Center(
-                          child: Text(
-                            _elapsedTime,
-                            style: TextStyle(
-                              fontSize: 36,
-                              fontWeight: FontWeight.bold,
-                              color: color,
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 40),
-
-                      // Info Cards
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 30),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: [
-                            _buildInfoCard(
-                              Icons.repeat,
-                              'Sets',
-                              widget.workout['sets'] as String,
-                              Colors.blue,
-                            ),
-                            _buildInfoCard(
-                              Icons.category,
-                              'Category',
-                              widget.workout['category'] as String,
-                              color,
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 40),
-
-                      // Description
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 30),
-                        child: Text(
-                          widget.workout['description'] as String,
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey[700],
-                            height: 1.5,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-
-                      const Spacer(),
-
-                      // Control Buttons
-                      Padding(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 30,
-                          vertical: 30,
+                          vertical: 20,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.grey.withOpacity(0.1),
+                              blurRadius: 10,
+                              offset: const Offset(0, -2),
+                            ),
+                          ],
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -331,10 +353,15 @@ class _PracticeWorkoutDetailPageState extends State<PracticeWorkoutDetailPage> {
         borderRadius: BorderRadius.circular(15),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, color: color, size: 30),
           const SizedBox(height: 8),
-          Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+          Text(
+            label,
+            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: 4),
           Text(
             value,
@@ -344,6 +371,8 @@ class _PracticeWorkoutDetailPageState extends State<PracticeWorkoutDetailPage> {
               color: color,
             ),
             textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),

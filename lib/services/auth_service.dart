@@ -1,16 +1,40 @@
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
+
+// Firebase imports - will fail gracefully if Firebase not initialized
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  // Initialize Firebase services with null safety
+  FirebaseAuth? _auth;
+  FirebaseFirestore? _firestore;
+  bool _firebaseAvailable = false;
+
+  AuthService() {
+    try {
+      _auth = FirebaseAuth.instance;
+      _firestore = FirebaseFirestore.instance;
+      // Check if Firebase is actually initialized
+      _firebaseAvailable = _auth != null && _firestore != null;
+    } catch (e) {
+      _firebaseAvailable = false;
+      if (kDebugMode) {
+        print('Firebase services not available: $e');
+      }
+    }
+  }
 
   // Get current user
-  User? get currentUser => _auth.currentUser;
+  User? get currentUser => _auth?.currentUser;
 
   // Auth state changes stream
-  Stream<User?> get authStateChanges => _auth.authStateChanges();
+  Stream<User?> get authStateChanges {
+    if (_firebaseAvailable && _auth != null) {
+      return _auth!.authStateChanges();
+    }
+    return const Stream.empty();
+  }
 
   // Register with email and password
   Future<Map<String, dynamic>> registerWithEmail(
@@ -18,16 +42,26 @@ class AuthService {
     String password,
     String fullName,
   ) async {
+    if (!_firebaseAvailable || _auth == null || _firestore == null) {
+      // Fallback: Use SharedPreferences only
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('userEmail', email);
+      await prefs.setString('userName', fullName);
+      await prefs.setBool('isLoggedIn', true);
+      await prefs.setString('userId', 'local_${DateTime.now().millisecondsSinceEpoch}');
+      return {'success': true, 'message': 'Account created successfully'};
+    }
+
     try {
       // Create user
-      UserCredential userCredential = await _auth
+      final userCredential = await _auth!
           .createUserWithEmailAndPassword(email: email, password: password);
 
       // Update display name
       await userCredential.user?.updateDisplayName(fullName);
 
       // Store user data in Firestore
-      await _firestore.collection('users').doc(userCredential.user!.uid).set({
+      await _firestore!.collection('users').doc(userCredential.user!.uid).set({
         'uid': userCredential.user!.uid,
         'fullName': fullName,
         'email': email,
@@ -68,8 +102,20 @@ class AuthService {
     String email,
     String password,
   ) async {
+    if (!_firebaseAvailable || _auth == null || _firestore == null) {
+      // Fallback: Check SharedPreferences for local user
+      final prefs = await SharedPreferences.getInstance();
+      final savedEmail = prefs.getString('userEmail');
+      
+      if (savedEmail == email) {
+        await prefs.setBool('isLoggedIn', true);
+        return {'success': true, 'message': 'Signed in successfully'};
+      }
+      return {'success': false, 'message': 'Invalid email or password.'};
+    }
+
     try {
-      UserCredential userCredential = await _auth.signInWithEmailAndPassword(
+      final userCredential = await _auth!.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
@@ -106,33 +152,61 @@ class AuthService {
     await prefs.remove('userId');
     await prefs.remove('userEmail');
     await prefs.remove('userName');
-    await _auth.signOut();
+    
+    if (_firebaseAvailable && _auth != null) {
+      try {
+        await _auth!.signOut();
+      } catch (e) {
+        if (kDebugMode) {
+          print('Error signing out from Firebase: $e');
+        }
+      }
+    }
   }
 
-  // Get user data from Firestore
+  // Get user data from Firestore or SharedPreferences
   Future<Map<String, dynamic>?> getUserData() async {
-    try {
-      if (currentUser == null) {
-        print('No current user found');
+    if (!_firebaseAvailable || _auth == null || _firestore == null) {
+      // Fallback: Get from SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getString('userId');
+      final userName = prefs.getString('userName') ?? 'Puja Kashyap';
+      final userEmail = prefs.getString('userEmail') ?? '';
+      
+      if (userId == null || !(prefs.getBool('isLoggedIn') ?? false)) {
         return null;
       }
 
-      print('Getting user data for: ${currentUser!.uid}');
-      DocumentSnapshot doc = await _firestore
+      return {
+        'uid': userId,
+        'fullName': userName,
+        'email': userEmail,
+        'totalSessions': prefs.getInt('totalSessions') ?? 0,
+        'totalMinutes': prefs.getInt('totalMinutes') ?? 0,
+        'currentStreak': prefs.getInt('currentStreak') ?? 0,
+        'longestStreak': prefs.getInt('longestStreak') ?? 0,
+        'level': prefs.getString('fitnessLevel') ?? 'Beginner',
+      };
+    }
+
+    try {
+      if (currentUser == null) {
+        return null;
+      }
+
+      final doc = await _firestore!
           .collection('users')
           .doc(currentUser!.uid)
           .get();
 
       if (doc.exists) {
         final data = doc.data() as Map<String, dynamic>;
-        print('User data retrieved: $data');
         return data;
       }
 
       // If user doesn't exist in Firestore but is logged in, create their data
       if (currentUser != null) {
-        print('User not found in Firestore, creating user data...');
-        await _firestore.collection('users').doc(currentUser!.uid).set({
+        await _firestore!.collection('users').doc(currentUser!.uid).set({
           'uid': currentUser!.uid,
           'fullName':
               currentUser!.displayName ??
@@ -149,7 +223,7 @@ class AuthService {
         });
 
         // Return the newly created data
-        final newDoc = await _firestore
+        final newDoc = await _firestore!
             .collection('users')
             .doc(currentUser!.uid)
             .get();
@@ -158,13 +232,47 @@ class AuthService {
 
       return null;
     } catch (e) {
-      print('Error getting user data: $e');
-      return null;
+      if (kDebugMode) {
+        print('Error getting user data: $e');
+      }
+      // Return fallback data from SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getString('userId');
+      final userName = prefs.getString('userName') ?? 'Puja Kashyap';
+      final userEmail = prefs.getString('userEmail') ?? '';
+      
+      if (userId == null) {
+        return null;
+      }
+
+      return {
+        'uid': userId,
+        'fullName': userName,
+        'email': userEmail,
+        'totalSessions': prefs.getInt('totalSessions') ?? 0,
+        'totalMinutes': prefs.getInt('totalMinutes') ?? 0,
+        'currentStreak': prefs.getInt('currentStreak') ?? 0,
+        'longestStreak': prefs.getInt('longestStreak') ?? 0,
+        'level': prefs.getString('fitnessLevel') ?? 'Beginner',
+      };
     }
   }
 
   // Update user workout stats
   Future<void> updateWorkoutStats(int minutes) async {
+    if (!_firebaseAvailable || _auth == null || _firestore == null) {
+      // Fallback: Update SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final currentSessions = prefs.getInt('totalSessions') ?? 0;
+      final currentMinutes = prefs.getInt('totalMinutes') ?? 0;
+      final currentStreak = prefs.getInt('currentStreak') ?? 0;
+      
+      await prefs.setInt('totalSessions', currentSessions + 1);
+      await prefs.setInt('totalMinutes', currentMinutes + minutes);
+      await prefs.setInt('currentStreak', currentStreak + 1);
+      return;
+    }
+
     try {
       if (currentUser == null) return;
 
@@ -193,7 +301,7 @@ class AuthService {
         newStreak = 1;
       }
 
-      await _firestore.collection('users').doc(currentUser!.uid).update({
+      await _firestore!.collection('users').doc(currentUser!.uid).update({
         'totalSessions': FieldValue.increment(1),
         'totalMinutes': FieldValue.increment(minutes),
         'currentStreak': newStreak,
@@ -204,13 +312,15 @@ class AuthService {
       if (userData != null) {
         final longestStreak = userData['longestStreak'] ?? 0;
         if (newStreak > longestStreak) {
-          await _firestore.collection('users').doc(currentUser!.uid).update({
+          await _firestore!.collection('users').doc(currentUser!.uid).update({
             'longestStreak': newStreak,
           });
         }
       }
     } catch (e) {
-      print('Error updating workout stats: $e');
+      if (kDebugMode) {
+        print('Error updating workout stats: $e');
+      }
     }
   }
 }
